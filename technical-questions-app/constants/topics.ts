@@ -1,0 +1,23 @@
+// technical-questions-repo/technical-questions-app/constants/topics.ts
+export const TECHNICAL_TOPICS = [
+  "AWS",
+  "Operating Systems",
+  "Python",
+  "Java",
+  "JavaScript",
+  "Data Structures",
+  "Algorithms",
+  "Databases",
+  "Networking",
+  "System Design",
+  "DevOps",
+  "Cloud Computing",
+  "Cybersecurity",
+  "Machine Learning",
+  "Artificial Intelligence",
+  "Web Development (Frontend)",
+  "Web Development (Backend)",
+  "Mobile Development",
+  "Software Testing",
+  "Version Control (Git)",
+];
