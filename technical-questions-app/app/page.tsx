@@ -172,7 +172,7 @@ export default function GenerateMCQPage() {
                       <SelectTrigger className="h-10">
                         <SelectValue placeholder="Select a technical topic..." />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-60 overflow-y-auto"> {/* Added for scrolling */}
                         {TECHNICAL_TOPICS.map((t) => (
                           <SelectItem key={t} value={t}>
                             {t}
