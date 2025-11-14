@@ -4,12 +4,22 @@ import { callAIProviderWithFallback, getProviderFromModel, getModelFromSelection
 
 // This function would be adapted to insert general technical questions
 async function insertTechnicalQuestion(pool: any, question: any) {
-  // Placeholder for actual insertion logic for technical questions
-  // For now, we'll just log it and return a dummy ID
-  console.log("Inserting technical question:", question);
-  // Example: INSERT INTO technical_questions (question_text, topic, difficulty) VALUES ($1, $2, $3)
-  // For now, we'll just return a dummy ID
-  return { id: Math.floor(Math.random() * 1000) };
+  const sql = `
+    INSERT INTO technical_questions (
+      question_text, question_type, tech_stack, difficulty, topic
+    )
+    VALUES ($1, $2, $3, $4, $5)
+    RETURNING id;
+  `;
+  const params = [
+    question.question,
+    question.question_type || 'short_answer', // Default to 'short_answer' if not provided by AI
+    question.tech_stack || null,
+    ['Easy', 'Medium', 'Hard'].includes(question.difficulty) ? question.difficulty : 'Medium', // Validate difficulty
+    question.topic,
+  ];
+  const res = await pool.query(sql, params);
+  return res.rows[0];
 }
 
 function extractJSONArray(raw: string): any[] {
@@ -39,19 +49,25 @@ function extractJSONArray(raw: string): any[] {
 
 const systemPrompt = "You are a JSON generator for technical interview questions. Respond with a JSON array of questions.";
 
-const promptTemplate = (topic: string, difficulty: string, count: number) => `
-  Generate ${count} technical interview question(s) about ${topic} with ${difficulty} difficulty.
+const promptTemplate = (topic: string, difficulty: string, count: number, techStack?: string, questionType?: string) => `
+  Generate ${count} *highly unique and diverse* technical interview question(s) about ${topic} with ${difficulty} difficulty.
+  The difficulty MUST be one of 'Easy', 'Medium', or 'Hard'.
+  ${techStack ? `Focus on the ${techStack} technology stack.` : ''}
+  ${questionType ? `The question type should be ${questionType}.` : ''}
+  Ensure all generated questions are distinct, do not repeat, and cover a wide range of sub-topics or aspects within the given topic.
   Return ONLY a JSON array with this structure:
   [
     {
       "question": "Question text",
       "topic": "${topic}",
-      "difficulty": "${difficulty}"
+      "difficulty": "${difficulty}", // Ensure this is 'Easy', 'Medium', or 'Hard'
+      "tech_stack": "${techStack || ''}",
+      "question_type": "${questionType || 'short_answer'}"
     }
   ]
 `;
 
-async function generateTechnicalQuestions(topic: string, difficulty: string, selectedAIModel: string, apiKey: string, numberOfQuestions: number) {
+async function generateTechnicalQuestions(topic: string, difficulty: string, selectedAIModel: string, apiKey: string, numberOfQuestions: number, techStack?: string, questionType?: string) {
   const provider = getProviderFromModel(selectedAIModel);
   if (!provider) {
     throw new Error(`Unsupported AI model: ${selectedAIModel}`);
@@ -64,7 +80,7 @@ async function generateTechnicalQuestions(topic: string, difficulty: string, sel
   };
   const text = await callAIProviderWithFallback(
     providerConfig,
-    promptTemplate(topic, difficulty, numberOfQuestions),
+    promptTemplate(topic, difficulty, numberOfQuestions, techStack, questionType),
     systemPrompt
   );
   if (!text) {
@@ -76,17 +92,24 @@ async function generateTechnicalQuestions(topic: string, difficulty: string, sel
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { topic, difficulty, selectedAIModel, apiKey, numberOfQuestions = 1 } = body;
+    const { topic, difficulty, selectedAIModel, apiKey, numberOfQuestions = 1, techStack, questionType } = body;
 
     if (!topic || !difficulty || !selectedAIModel || !apiKey) {
       return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
     }
 
-    const questions = await generateTechnicalQuestions(topic, difficulty, selectedAIModel, apiKey, numberOfQuestions);
+    const questions = await generateTechnicalQuestions(topic, difficulty, selectedAIModel, apiKey, numberOfQuestions, techStack, questionType);
     
     const pool = getPool();
     const insertedIds = [];
     for (const question of questions) {
+      // Add techStack and questionType to question object if provided in the request body
+      if (techStack) {
+        question.tech_stack = techStack;
+      }
+      if (questionType) {
+        question.question_type = questionType;
+      }
       const result = await insertTechnicalQuestion(pool, question);
       insertedIds.push(result.id);
     }

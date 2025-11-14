@@ -4,11 +4,25 @@ import { callAIProviderWithFallback, getProviderFromModel, getModelFromSelection
 
 async function insertMCQ(pool: any, mcq: any) {
   const sql = `
-    INSERT INTO mcq_questions (question, options, correct_answer, topic, difficulty)
-    VALUES ($1, $2::jsonb, $3, $4, $5)
+    INSERT INTO technical_questions (
+      question_text, question_type, tech_stack, difficulty, topic,
+      option_a, option_b, option_c, option_d, correct_answer
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
     RETURNING id;
   `;
-  const params = [mcq.question, JSON.stringify(mcq.options), mcq.correct_answer, mcq.topic, mcq.difficulty];
+  const params = [
+    mcq.question,
+    'mcq', // question_type
+    mcq.tech_stack || mcq.topic, // Use tech_stack if provided, otherwise fallback to topic
+    ['Easy', 'Medium', 'Hard'].includes(mcq.difficulty) ? mcq.difficulty : 'Medium', // Validate difficulty
+    mcq.topic,
+    mcq.options.A,
+    mcq.options.B,
+    mcq.options.C,
+    mcq.options.D,
+    mcq.correct_answer,
+  ];
   const res = await pool.query(sql, params);
   return res.rows[0];
 }
@@ -41,8 +55,11 @@ function extractJSONArray(raw: string): any[] {
 
 const systemPrompt = "You are a JSON generator for multiple-choice questions. Respond with a JSON array of questions.";
 
-const promptTemplate = (topic: string, difficulty: string, count: number) => `
-  Generate ${count} multiple-choice question(s) about ${topic} with ${difficulty} difficulty.
+const promptTemplate = (topic: string, difficulty: string, count: number, techStack?: string) => `
+  Generate ${count} *highly unique and diverse* multiple-choice question(s) about ${topic} with ${difficulty} difficulty.
+  The difficulty MUST be one of 'Easy', 'Medium', or 'Hard'.
+  ${techStack ? `Focus on the ${techStack} technology stack.` : ''}
+  Ensure all generated questions are distinct, do not repeat, and cover a wide range of sub-topics or aspects within the given topic.
   Return ONLY a JSON array with this structure:
   [
     {
@@ -55,12 +72,13 @@ const promptTemplate = (topic: string, difficulty: string, count: number) => `
       },
       "correct_answer": "A", // Must be one of "A", "B", "C", "D"
       "topic": "${topic}",
-      "difficulty": "${difficulty}"
+      "difficulty": "${difficulty}", // Ensure this is 'Easy', 'Medium', or 'Hard'
+      "tech_stack": "${techStack || ''}"
     }
   ]
 `;
 
-async function generateMCQs(topic: string, difficulty: string, selectedAIModel: string, apiKey: string, numberOfQuestions: number) {
+async function generateMCQs(topic: string, difficulty: string, selectedAIModel: string, apiKey: string, numberOfQuestions: number, techStack?: string) {
   const provider = getProviderFromModel(selectedAIModel);
   if (!provider) {
     throw new Error(`Unsupported AI model: ${selectedAIModel}`);
@@ -73,7 +91,7 @@ async function generateMCQs(topic: string, difficulty: string, selectedAIModel: 
   };
   const text = await callAIProviderWithFallback(
     providerConfig,
-    promptTemplate(topic, difficulty, numberOfQuestions),
+    promptTemplate(topic, difficulty, numberOfQuestions, techStack),
     systemPrompt
   );
   if (!text) {
@@ -85,17 +103,21 @@ async function generateMCQs(topic: string, difficulty: string, selectedAIModel: 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { topic, difficulty, selectedAIModel, apiKey, numberOfQuestions = 1 } = body;
+    const { topic, difficulty, selectedAIModel, apiKey, numberOfQuestions = 1, techStack } = body;
 
     if (!topic || !difficulty || !selectedAIModel || !apiKey) {
       return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
     }
 
-    const mcqs = await generateMCQs(topic, difficulty, selectedAIModel, apiKey, numberOfQuestions);
+    const mcqs = await generateMCQs(topic, difficulty, selectedAIModel, apiKey, numberOfQuestions, techStack);
     
     const pool = getPool();
     const insertedIds = [];
     for (const mcq of mcqs) {
+      // Add techStack to mcq object if provided in the request body
+      if (techStack) {
+        mcq.tech_stack = techStack;
+      }
       const result = await insertMCQ(pool, mcq);
       insertedIds.push(result.id);
     }

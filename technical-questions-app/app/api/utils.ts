@@ -181,6 +181,8 @@ export async function callAIProvider(
           ...(systemPrompt ? [{ role: 'system' as const, content: systemPrompt }] : []),
           { role: 'user' as const, content: prompt },
         ] as any,
+        temperature: 0.9, // Further increased temperature for more diverse outputs
+        topP: 1.0,
       });
       
       if (!chatResponse.choices || chatResponse.choices.length === 0) {
