@@ -1,8 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getPool } from "@/lib/postgres";
+import { query, resetTechnicalQuestionsSequence } from "@/lib/rds";
 import { callAIProviderWithFallback, getProviderFromModel, getModelFromSelection, AIProvider, ProviderConfig } from '../../api/utils';
 
-async function insertMCQ(pool: any, mcq: any) {
+async function insertMCQ(mcq: any) {
   const sql = `
     INSERT INTO technical_questions (
       question_text, question_type, tech_stack, difficulty, topic,
@@ -23,8 +23,11 @@ async function insertMCQ(pool: any, mcq: any) {
     mcq.options.D,
     mcq.correct_answer,
   ];
-  const res = await pool.query(sql, params);
-  return res.rows[0];
+  const { rows, error } = await query(sql, params);
+  if (error) {
+    throw error;
+  }
+  return rows[0];
 }
 
 function extractJSONArray(raw: string): any[] {
@@ -102,6 +105,9 @@ async function generateMCQs(topic: string, difficulty: string, selectedAIModel: 
 
 export async function POST(request: NextRequest) {
   try {
+    // Attempt to reset the sequence before any insertions
+    await resetTechnicalQuestionsSequence();
+
     const body = await request.json();
     const { topic, difficulty, selectedAIModel, apiKey, numberOfQuestions = 1, techStack } = body;
 
@@ -111,14 +117,13 @@ export async function POST(request: NextRequest) {
 
     const mcqs = await generateMCQs(topic, difficulty, selectedAIModel, apiKey, numberOfQuestions, techStack);
     
-    const pool = getPool();
     const insertedIds = [];
     for (const mcq of mcqs) {
       // Add techStack to mcq object if provided in the request body
       if (techStack) {
         mcq.tech_stack = techStack;
       }
-      const result = await insertMCQ(pool, mcq);
+      const result = await insertMCQ(mcq);
       insertedIds.push(result.id);
     }
 

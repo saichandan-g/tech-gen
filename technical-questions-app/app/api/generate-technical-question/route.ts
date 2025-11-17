@@ -1,9 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getPool } from "@/lib/postgres";
+import { query, resetTechnicalQuestionsSequence } from "@/lib/rds";
 import { callAIProviderWithFallback, getProviderFromModel, getModelFromSelection, AIProvider, ProviderConfig } from '../../api/utils';
 
 // This function would be adapted to insert general technical questions
-async function insertTechnicalQuestion(pool: any, question: any) {
+async function insertTechnicalQuestion(question: any) {
   const sql = `
     INSERT INTO technical_questions (
       question_text, question_type, tech_stack, difficulty, topic
@@ -18,8 +18,11 @@ async function insertTechnicalQuestion(pool: any, question: any) {
     ['Easy', 'Medium', 'Hard'].includes(question.difficulty) ? question.difficulty : 'Medium', // Validate difficulty
     question.topic,
   ];
-  const res = await pool.query(sql, params);
-  return res.rows[0];
+  const { rows, error } = await query(sql, params);
+  if (error) {
+    throw error;
+  }
+  return rows[0];
 }
 
 function extractJSONArray(raw: string): any[] {
@@ -91,6 +94,9 @@ async function generateTechnicalQuestions(topic: string, difficulty: string, sel
 
 export async function POST(request: NextRequest) {
   try {
+    // Attempt to reset the sequence before any insertions
+    await resetTechnicalQuestionsSequence();
+
     const body = await request.json();
     const { topic, difficulty, selectedAIModel, apiKey, numberOfQuestions = 1, techStack, questionType } = body;
 
@@ -100,7 +106,6 @@ export async function POST(request: NextRequest) {
 
     const questions = await generateTechnicalQuestions(topic, difficulty, selectedAIModel, apiKey, numberOfQuestions, techStack, questionType);
     
-    const pool = getPool();
     const insertedIds = [];
     for (const question of questions) {
       // Add techStack and questionType to question object if provided in the request body
@@ -110,7 +115,7 @@ export async function POST(request: NextRequest) {
       if (questionType) {
         question.question_type = questionType;
       }
-      const result = await insertTechnicalQuestion(pool, question);
+      const result = await insertTechnicalQuestion(question);
       insertedIds.push(result.id);
     }
 
