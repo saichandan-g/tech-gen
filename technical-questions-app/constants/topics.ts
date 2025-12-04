@@ -1,5 +1,6 @@
 // technical-questions-repo/technical-questions-app/constants/topics.ts
 export const TECHNICAL_TOPICS = [
+  "Custom Topic",
   "AWS",
   "Operating Systems",
   "Python",
@@ -20,4 +21,17 @@ export const TECHNICAL_TOPICS = [
   "Mobile Development",
   "Software Testing",
   "Version Control (Git)",
+];
+
+export const DATABASES = [
+  "PostgreSQL",
+  "MySQL",
+  "MongoDB",
+  "Redis",
+  "Cassandra",
+  "Elasticsearch",
+  "SQLite",
+  "Oracle",
+  "Microsoft SQL Server",
+  "DynamoDB",
 ];

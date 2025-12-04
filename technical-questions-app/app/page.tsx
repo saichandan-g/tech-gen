@@ -9,7 +9,7 @@ import { CodeBlock } from "@/components/ui/code-block"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { AIModelSelectionFiltered } from "@/components/AIModelSelectionFiltered"
-import { TECHNICAL_TOPICS } from "@/constants/topics"
+import { TECHNICAL_TOPICS, DATABASES } from "@/constants/topics"
 
 // Helper function to render text with code blocks
 const renderTextWithCodeBlocks = (text: string) => {
@@ -37,15 +37,17 @@ const renderTextWithCodeBlocks = (text: string) => {
 
 export default function GenerateMCQPage() {
   const [topic, setTopic] = useState(TECHNICAL_TOPICS[0])
+  const [customTopic, setCustomTopic] = useState("")
+  const [selectedDatabase, setSelectedDatabase] = useState(DATABASES[0])
   const [isLoading, setIsLoading] = useState(false)
   const [results, setResults] = useState<any>(null)
   const [numberOfQuestions, setNumberOfQuestions] = useState(1)
   const [selectedDifficulty, setSelectedDifficulty] = useState<string | null>(null)
-  
+
   const [selectedAIModel, setSelectedAIModel] = useState<string>("")
   const [aiApiKey, setAIApiKey] = useState<string>("")
   const [hasSelectedModel, setHasSelectedModel] = useState(false)
-  
+
   const handleAIModelSelected = (model: string, apiKey: string) => {
     console.log(`✅ Selected AI Model: ${model}`);
     setSelectedAIModel(model);
@@ -78,7 +80,8 @@ export default function GenerateMCQPage() {
 
     const apiUrl = "/api/generate-mcq";
     const requestBody = {
-      topic,
+      topic: topic === "Custom Topic" ? customTopic : topic,
+      techStack: topic === "Databases" ? selectedDatabase : undefined,
       difficulty: selectedDifficulty || "medium",
       selectedAIModel,
       apiKey: aiApiKey,
@@ -180,6 +183,33 @@ export default function GenerateMCQPage() {
                         ))}
                       </SelectContent>
                     </Select>
+                    {topic === "Custom Topic" && (
+                      <Input
+                        placeholder="Enter your custom topic..."
+                        value={customTopic}
+                        onChange={(e) => setCustomTopic(e.target.value)}
+                        className="mt-2"
+                      />
+                    )}
+                    {topic === "Databases" && (
+                      <div className="mt-2 space-y-2">
+                        <Label htmlFor="database" className="text-sm font-medium">
+                          Select Database
+                        </Label>
+                        <Select value={selectedDatabase} onValueChange={setSelectedDatabase}>
+                          <SelectTrigger className="h-10">
+                            <SelectValue placeholder="Select a database..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {DATABASES.map((db) => (
+                              <SelectItem key={db} value={db}>
+                                {db}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                   </div>
 
 
