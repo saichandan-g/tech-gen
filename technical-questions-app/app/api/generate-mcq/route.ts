@@ -15,7 +15,11 @@ async function insertMCQ(mcq: any) {
     mcq.question,
     'mcq', // question_type
     mcq.tech_stack || mcq.topic, // Use tech_stack if provided, otherwise fallback to topic
-    ['Easy', 'Medium', 'Hard'].includes(mcq.difficulty) ? mcq.difficulty : 'Medium', // Validate difficulty
+    (() => {
+      if (!mcq.difficulty) return 'Medium';
+      const normalized = mcq.difficulty.charAt(0).toUpperCase() + mcq.difficulty.slice(1).toLowerCase();
+      return ['Easy', 'Medium', 'Hard'].includes(normalized) ? normalized : 'Medium';
+    })(),
     mcq.topic,
     mcq.options.A,
     mcq.options.B,
@@ -116,7 +120,7 @@ export async function POST(request: NextRequest) {
     }
 
     const mcqs = await generateMCQs(topic, difficulty, selectedAIModel, apiKey, numberOfQuestions, techStack);
-    
+
     const insertedIds = [];
     for (const mcq of mcqs) {
       // Add techStack to mcq object if provided in the request body
