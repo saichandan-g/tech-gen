@@ -9,7 +9,6 @@ import { CodeBlock } from "@/components/ui/code-block"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { AIModelSelectionFiltered } from "@/components/AIModelSelectionFiltered"
-import { TECHNICAL_TOPICS, DATABASES } from "@/constants/topics"
 
 // Helper function to render text with code blocks
 const renderTextWithCodeBlocks = (text: string) => {
@@ -36,9 +35,11 @@ const renderTextWithCodeBlocks = (text: string) => {
 };
 
 export default function GenerateMCQPage() {
-  const [topic, setTopic] = useState(TECHNICAL_TOPICS[0])
+  const [topics, setTopics] = useState<string[]>([])
+  const [databases, setDatabases] = useState<string[]>([])
+  const [topic, setTopic] = useState<string>("")
   const [customTopic, setCustomTopic] = useState("")
-  const [selectedDatabase, setSelectedDatabase] = useState(DATABASES[0])
+  const [selectedDatabase, setSelectedDatabase] = useState<string>("")
   const [isLoading, setIsLoading] = useState(false)
   const [results, setResults] = useState<any>(null)
   const [numberOfQuestions, setNumberOfQuestions] = useState(1)
@@ -47,6 +48,39 @@ export default function GenerateMCQPage() {
   const [selectedAIModel, setSelectedAIModel] = useState<string>("")
   const [aiApiKey, setAIApiKey] = useState<string>("")
   const [hasSelectedModel, setHasSelectedModel] = useState(false)
+
+  const [topicSearch, setTopicSearch] = useState("")
+  const [databaseSearch, setDatabaseSearch] = useState("")
+
+  useEffect(() => {
+    const fetchTopics = async () => {
+      try {
+        const response = await fetch("/api/topics")
+        const data = await response.json()
+        const sortedTopics = [...data.topics].sort((a, b) => {
+          if (a === "Custom Topic") return 1
+          if (b === "Custom Topic") return -1
+          return a.localeCompare(b)
+        })
+        const sortedDatabases = [...data.databases].sort((a, b) => a.localeCompare(b))
+        setTopics(sortedTopics)
+        setDatabases(sortedDatabases)
+        setTopic(sortedTopics[0])
+        setSelectedDatabase(sortedDatabases[0])
+      } catch (error) {
+        console.error("Error fetching topics:", error)
+      }
+    }
+    fetchTopics()
+  }, [])
+
+  const filteredTopics = topics.filter((t) =>
+    t.toLowerCase().includes(topicSearch.toLowerCase())
+  )
+
+  const filteredDatabases = databases.filter((db) =>
+    db.toLowerCase().includes(databaseSearch.toLowerCase())
+  )
 
   const handleAIModelSelected = (model: string, apiKey: string) => {
     console.log(`✅ Selected AI Model: ${model}`);
@@ -78,24 +112,50 @@ export default function GenerateMCQPage() {
       return
     }
 
-    const apiUrl = "/api/generate-mcq";
-    const requestBody = {
-      topic: topic === "Custom Topic" ? customTopic : topic,
-      techStack: topic === "Databases" ? selectedDatabase : undefined,
-      difficulty: selectedDifficulty || "medium",
-      selectedAIModel,
-      apiKey: aiApiKey,
-      numberOfQuestions,
-    };
-
-    console.log("📤 Sending request with:", {
-      topic,
-      model: selectedAIModel,
-      difficulty: selectedDifficulty
-    });
-
     try {
-      const response = await fetch(apiUrl, {
+      let finalTopic = topic;
+
+      if (topic === "Custom Topic" && customTopic) {
+        const addTopicResponse = await fetch("/api/topics", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ customTopic }),
+        })
+        
+        const addTopicData = await addTopicResponse.json()
+        
+        if (!addTopicResponse.ok) {
+          setResults({
+            error: "Failed to add custom topic",
+            details: addTopicData.error || null,
+          })
+          setIsLoading(false)
+          return
+        }
+        
+        finalTopic = customTopic.trim()
+        setTopics(addTopicData.topics)
+      }
+
+      const apiUrl = "/api/generate-mcq";
+      const requestBody = {
+        topic: finalTopic,
+        techStack: topic === "Databases" ? selectedDatabase : undefined,
+        difficulty: selectedDifficulty || "medium",
+        selectedAIModel,
+        apiKey: aiApiKey,
+        numberOfQuestions,
+      };
+
+      console.log("📤 Sending request with:", {
+        topic,
+        model: selectedAIModel,
+        difficulty: selectedDifficulty
+      });
+
+      const generateResponse = await fetch(apiUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -103,20 +163,20 @@ export default function GenerateMCQPage() {
         body: JSON.stringify(requestBody),
       })
 
-      const data = await response.json()
+      const generateData = await generateResponse.json()
 
-      if (!response.ok) {
+      if (!generateResponse.ok) {
         setResults({
-          error: data.error || `Error: ${response.status}`,
-          details: data.details || null,
+          error: generateData.error || `Error: ${generateResponse.status}`,
+          details: generateData.details || null,
         })
         return
       }
 
       setResults({
         success: true,
-        mcqs: data.mcqs,
-        message: `Inserted ${data.mcqs.length} out of ${data.requestedQuestions} requested multiple-choice question(s)`,
+        mcqs: generateData.mcqs,
+        message: `Inserted ${generateData.mcqs.length} out of ${generateData.requestedQuestions} requested multiple-choice question(s)`,
         type: "mcq"
       })
     } catch (error) {
@@ -171,16 +231,26 @@ export default function GenerateMCQPage() {
                     <Label htmlFor="topic" className="text-base font-semibold">
                       Topic
                     </Label>
-                    <Select value={topic} onValueChange={setTopic}>
+                    <Input
+                      placeholder="🔍 Search topics..."
+                      value={topicSearch}
+                      onChange={(e) => setTopicSearch(e.target.value)}
+                      className="h-10 mb-2"
+                    />
+                    <Select value={topic} onValueChange={(value) => { setTopic(value); setTopicSearch("") }}>
                       <SelectTrigger className="h-10">
                         <SelectValue placeholder="Select a technical topic..." />
                       </SelectTrigger>
-                      <SelectContent className="max-h-60 overflow-y-auto"> {/* Added for scrolling */}
-                        {TECHNICAL_TOPICS.map((t) => (
-                          <SelectItem key={t} value={t}>
-                            {t}
-                          </SelectItem>
-                        ))}
+                      <SelectContent className="max-h-60 overflow-y-auto">
+                        {filteredTopics.length > 0 ? (
+                          filteredTopics.map((t) => (
+                            <SelectItem key={t} value={t}>
+                              {t}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <div className="py-2 px-4 text-sm text-gray-500">No topics found</div>
+                        )}
                       </SelectContent>
                     </Select>
                     {topic === "Custom Topic" && (
@@ -196,16 +266,26 @@ export default function GenerateMCQPage() {
                         <Label htmlFor="database" className="text-sm font-medium">
                           Select Database
                         </Label>
-                        <Select value={selectedDatabase} onValueChange={setSelectedDatabase}>
+                        <Input
+                          placeholder="🔍 Search databases..."
+                          value={databaseSearch}
+                          onChange={(e) => setDatabaseSearch(e.target.value)}
+                          className="h-10 mb-2"
+                        />
+                        <Select value={selectedDatabase} onValueChange={(value) => { setSelectedDatabase(value); setDatabaseSearch("") }}>
                           <SelectTrigger className="h-10">
                             <SelectValue placeholder="Select a database..." />
                           </SelectTrigger>
-                          <SelectContent>
-                            {DATABASES.map((db) => (
-                              <SelectItem key={db} value={db}>
-                                {db}
-                              </SelectItem>
-                            ))}
+                          <SelectContent className="max-h-60 overflow-y-auto">
+                            {filteredDatabases.length > 0 ? (
+                              filteredDatabases.map((db) => (
+                                <SelectItem key={db} value={db}>
+                                  {db}
+                                </SelectItem>
+                              ))
+                            ) : (
+                              <div className="py-2 px-4 text-sm text-gray-500">No databases found</div>
+                            )}
                           </SelectContent>
                         </Select>
                       </div>

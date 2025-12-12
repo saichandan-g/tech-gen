@@ -62,12 +62,31 @@ function extractJSONArray(raw: string): any[] {
 
 const systemPrompt = "You are a JSON generator for multiple-choice questions. Respond with a JSON array of questions.";
 
-const promptTemplate = (topic: string, difficulty: string, count: number, techStack?: string) => `
-  Generate ${count} *highly unique and diverse* multiple-choice question(s) about ${topic} with ${difficulty} difficulty.
-  The difficulty MUST be one of 'Easy', 'Medium', or 'Hard'.
-  ${techStack ? `Focus on the ${techStack} technology stack.` : ''}
-  Ensure all generated questions are distinct, do not repeat, and cover a wide range of sub-topics or aspects within the given topic.
-  Return ONLY a JSON array with this structure:
+const promptTemplate = (
+  topic: string,
+  difficulty: string,
+  count: number,
+  techStack?: string
+) => `
+  Generate ${count} *highly unique and diverse* multiple-choice question(s) ONLY within the scope of the ${techStack || topic} technology stack.
+
+  🎯 STRICT REQUIREMENT:
+  - The questions MUST be exclusively related to "${techStack || topic}".
+  - Do NOT include questions from any other domain, technology, cloud provider, or general concepts outside "${techStack || topic}".
+  - If a question cannot be written within "${techStack || topic}", SKIP it and generate another one within the correct scope.
+
+  Difficulty MUST be exactly one of: "Easy", "Medium", "Hard".
+  Generate questions with ${difficulty} difficulty.
+
+  ${techStack ? `The questions MUST directly involve ${techStack} features, services, components, APIs, configurations, or best practices.` : ''}
+
+  Ensure:
+  - All questions are unique.
+  - No repetitions.
+  - Wide coverage of subtopics inside the SAME technology stack.
+  - NO CROSS-TOPIC content.
+
+  Return ONLY a valid JSON array with this exact structure:
   [
     {
       "question": "Question text",
@@ -79,11 +98,12 @@ const promptTemplate = (topic: string, difficulty: string, count: number, techSt
       },
       "correct_answer": "A", // Must be one of "A", "B", "C", "D"
       "topic": "${topic}",
-      "difficulty": "${difficulty}", // Ensure this is 'Easy', 'Medium', or 'Hard'
+      "difficulty": "${difficulty}",
       "tech_stack": "${techStack || ''}"
     }
   ]
 `;
+
 
 async function generateMCQs(topic: string, difficulty: string, selectedAIModel: string, apiKey: string, numberOfQuestions: number, techStack?: string) {
   const provider = getProviderFromModel(selectedAIModel);
